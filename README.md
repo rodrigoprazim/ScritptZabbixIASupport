@@ -60,10 +60,12 @@ The script expects the following parameters in the webhook `value` field:
 > * High load due to intensive processes
 > * Insufficient resources
 >
-> Suggested actions:  
-> * Check running processes  
-> * Optimize resource usage  
-> * Consider hardware upgrades  
+> Suggested actions:
+> * Check running processes
+> * Optimize resource usage
+> * Consider hardware upgrades
+
+* Credits: https://blog.zabbix.com/pt/ia-zabbix/29550/
 
 ## ⭐ Star History
 
