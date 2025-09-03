@@ -1,0 +1,115 @@
+var Gemini = {
+    params: {},
+    default_model: 'gemini-2.0-flash',
+
+    setParams: function(params) {
+        if (typeof params !== 'object') {
+            return;
+        }
+
+        Gemini.params = params;
+
+        if (typeof Gemini.params.api_key !== 'string' || Gemini.params.api_key === '') {
+            throw 'API key for Gemini is required.';
+        }
+
+        if (typeof Gemini.params.model !== 'string' || Gemini.params.model.trim() === '') {
+            Gemini.params.model = Gemini.default_model;
+        }
+
+        Gemini.params.url = 'https://generativelanguage.googleapis.com/v1beta/models/' +
+                            Gemini.params.model.trim() + ':generateContent';
+    },
+
+    request: function(data) {
+        if (!Gemini.params.api_key) {
+            throw 'API key is missing.';
+        }
+
+        var request = new HttpRequest();
+        request.addHeader('Content-Type: application/json');
+
+        var urlWithKey = Gemini.params.url + '?key=' + Gemini.params.api_key;
+
+        Zabbix.log(4, '[ Gemini Webhook ] Sending request to model "' + Gemini.params.model + '" → ' +
+                        urlWithKey + '\n' + JSON.stringify(data));
+
+        var response = request.post(urlWithKey, JSON.stringify(data));
+
+        Zabbix.log(4, '[ Gemini Webhook ] Received response with status code ' +
+                        request.getStatus() + '\n' + response);
+
+        if (request.getStatus() < 200 || request.getStatus() >= 300) {
+            throw 'Gemini API request failed with status code ' + request.getStatus() + '.';
+        }
+
+        try {
+            response = JSON.parse(response);
+        } catch (error) {
+            Zabbix.log(4, '[ Gemini Webhook ] Failed to parse response from Gemini.');
+            response = null;
+        }
+
+        return response;
+    }
+};
+
+try {
+    var params = JSON.parse(value),
+        data = {},
+        result = "",
+        required_params = {
+            'alert_subject': '{TRIGGER.NAME}',
+            'ip_address': '{HOST.IP}'
+        };
+
+    Object.keys(required_params).forEach(function(key) {
+        if (!params.hasOwnProperty(key)) {
+            throw 'Missing required parameter: "' + key + '" with value: "' + required_params[key] + '".';
+        }
+
+        if (!params[key] || params[key].trim() === '') {
+            throw 'Parameter "' + key + '" cannot be empty, set in value: ' + required_params[key];
+        }
+    });
+
+    var message = "The alert: " + params.alert_subject + ", with the IP: " + params.ip_address +
+        " occurred in Zabbix. Please suggest possible causes and solutions to resolve this issue. " +
+        "Do not write a long text — keep it around 10 lines, including causes, ideas, debugging commands, " +
+        "and actions to prevent future incidents. Kindly do not use any text formatting such as *.";
+
+    if (params.language && params.language.trim() !== '') {
+        message += " And reply to me in the language: " + params.language.trim() + ".";
+    }
+
+    data = {
+        contents: [{
+            parts: [{
+                text: message
+            }]
+        }]
+    };
+
+    Gemini.setParams({
+        api_key: params.api_key,
+        model: params.model
+    });
+
+    var response = Gemini.request(data);
+
+    if (response && response.candidates && response.candidates.length > 0) {
+        result = response.candidates[0].content.parts[0].text.trim();
+    } else {
+        throw 'No response from Gemini.';
+    }
+
+    if (!params.language || params.language.trim() === '') {
+        result += "\n\nTip: You can specify a response language by setting the 'language' parameter, e.g., 'language: Portugues or PT-BR'.";
+    }
+
+    return result;
+
+} catch (error) {
+    Zabbix.log(3, '[ Gemini Webhook ] ERROR: ' + error);
+    throw 'Sending failed: ' + error;
+}
